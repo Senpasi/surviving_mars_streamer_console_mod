@@ -28,7 +28,9 @@ function TriggerConsoleAction(action, params)
 			descr.storm_radius = orig_storm_radius
 		end)
     elseif action == "GiveMoney" then
-        -- UIAddFunding(100000000)
+        if UIColony then
+            UIColony.funds:ChangeFunding(tonumber(params) or 100000000)
+        end
     elseif action == "SpawnColonists" then
 		local GenerateColonistDataOrig = GenerateColonistData
 		function GenerateColonistData(city, _, ...)
