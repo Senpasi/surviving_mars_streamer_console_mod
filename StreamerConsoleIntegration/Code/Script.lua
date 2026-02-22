@@ -41,6 +41,7 @@ function TriggerConsoleAction(action, params)
 			elseif to_add then
 				p.traits[to_add] = true
 			end
+		    p.death_age = 5000
 			if params then
 				p.name = params
 			end
