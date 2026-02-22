@@ -1,4 +1,9 @@
 
+local g_env = _G
+function OnMsg.ChoGGi_UpdateBlacklistFuncs(env)
+	g_env = env
+end
+
 function TriggerConsoleAction(action, params)
     if action == "DustStorm" then
 		CreateGameTimeThread(function()
@@ -150,6 +155,128 @@ CreateRealTimeThread(function()
 			end
 		end
         Sleep(1000)
+    end
+end)
+
+function SaveColonyStatusToYaml()
+    print("SaveColonyStatusToYaml...")
+    local city = UICity
+    if not city then return end
+
+    local res_overview = GetCityResourceOverview(city)
+    if not res_overview then return end
+    print("SaveColonyStatusToYaml running...")
+
+    local data = {
+        timestamp = RealTime(), -- Используем RealTime() вместо OsTime()
+        sol = city.day or 0,
+        population = table.count(city.labels.Colonist or ""),
+        unemployed = table.count(city.labels.Unemployed or ""),
+        homeless = table.count(city.labels.Homeless or ""),
+        resources = {},
+        buildings = {
+            count = city:CountBuildings(),
+            constructions_today = city.constructions_completed_today or 0
+        },
+        transportation = {
+            drones = table.count(city.labels.Drone or ""),
+            shuttles = city:CountShuttles() or 0
+        },
+        domes = table.count(GetCommandCenterDomesList()),
+        funds = tostring(UIColony.funds:GetFunding()),
+        temperature = string.format("%.1f", UICity.ambient_temp or 0),
+        weather = ActiveMapData and ActiveMapData.MapSettings_DustStorm or "Unknown"
+    }
+
+    -- Вспомогательная функция для добавления ресурсов
+    local function add_resource(name, stored, produced, consumed, capacity)
+        data.resources[name] = {
+            stored = string.format("%.1f", stored / const.ResourceScale),
+            produced_per_hour = string.format("%.1f", produced / const.ResourceScale),
+            consumed_per_hour = string.format("%.1f", consumed / const.ResourceScale),
+            capacity = string.format("%.1f", capacity / const.ResourceScale)
+        }
+    end
+
+    -- Электричество
+    add_resource("electricity",
+        res_overview:GetTotalStoredPower(),
+        res_overview:GetTotalProducedPower(),
+        res_overview:GetTotalRequiredPower(),
+        res_overview:GetElectricityStorageCapacity()
+    )
+
+    -- Вода
+    add_resource("water",
+        res_overview:GetTotalStoredWater(),
+        res_overview:GetTotalProducedWater(),
+        res_overview:GetTotalRequiredWater(),
+        res_overview:GetWaterStorageCapacity()
+    )
+
+    -- Кислород
+    add_resource("oxygen",
+        res_overview:GetTotalStoredAir(),
+        res_overview:GetTotalProducedAir(),
+        res_overview:GetTotalRequiredAir(),
+        res_overview:GetAirStorageCapacity()
+    )
+
+    -- Собираем другие ресурсы: металлы, полимеры, бетон, машины и т.д.
+    local stockpile_resources = GetStockpileResourceList() -- {"Concrete", "Metals", "Polymers", "Electronics", "Machinery", "PreciousMetals"}
+    for _, res_name in ipairs(stockpile_resources) do
+        local stored = res_overview["GetAvailable" .. res_name](res_overview)
+        local produced = res_overview["Get" .. res_name .. "ProducedYesterday"](res_overview)
+        local consumed = res_overview["Get" .. res_name .. "ConsumedByConsumptionYesterday"](res_overview)
+        --local capacity = res_overview["GetMaxStored" .. res_name](res_overview)
+
+        add_resource(res_name:lower(),
+            stored, produced, consumed, 0
+        )
+    end
+
+    -- Преобразование таблицы в YAML строку
+    local yaml = ""
+
+    local function serialize(value, indent)
+        local indent = indent or ""
+        if type(value) == "table" then
+            for k, v in sorted_pairs(value) do
+                if type(k) == "number" then
+                    yaml = yaml .. indent .. "- "
+                    if type(v) == "table" then
+                        yaml = yaml .. "\n"
+                        serialize(v, indent .. "  ")
+                    else
+                        yaml = yaml .. tostring(v) .. "\n"
+                    end
+                else
+                    yaml = yaml .. indent .. tostring(k) .. ": "
+                    if type(v) == "table" then
+                        yaml = yaml .. "\n"
+                        serialize(v, indent .. "  ")
+                    else
+                        yaml = yaml .. tostring(v) .. "\n"
+                    end
+                end
+            end
+        else
+            yaml = yaml .. tostring(value) .. "\n"
+        end
+    end
+
+    serialize(data)
+
+    -- Сохранение
+    g_env.AsyncStringToFile("AppData/from_game.yaml", yaml)
+    print("SaveColonyStatusToYaml saved!")
+end
+
+-- Запуск раз в 30 секунд
+CreateRealTimeThread(function()
+    while true do
+        Sleep(30 * 1000) -- 30 секунд
+        SaveColonyStatusToYaml()
     end
 end)
 
