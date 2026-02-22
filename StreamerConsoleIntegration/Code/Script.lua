@@ -123,6 +123,8 @@ function TriggerConsoleAction(action, params)
 			title = "Test POI",
 			multisel = true,
 		}
+    elseif action == "StoryBit" then
+        ForceActivateStoryBit(params, ActiveMapID, nil, true)
 	else
 		print("Unknown action " .. action)
     end
