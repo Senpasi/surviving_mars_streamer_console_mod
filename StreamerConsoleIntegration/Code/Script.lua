@@ -130,6 +130,7 @@ function TriggerConsoleAction(action, params)
     print("Console Action Executed: " .. tostring(action))
 end
 
+-- Monitor CSV file for new console commands (processed every second)
 CreateRealTimeThread(function()
 	local filename = "AppData/to_game.csv"
 	local csv_load_fields = {
@@ -158,17 +159,16 @@ CreateRealTimeThread(function()
     end
 end)
 
+-- Generate colony status report in YAML format (saved to AppData/from_game.yaml)
 function SaveColonyStatusToYaml()
-    print("SaveColonyStatusToYaml...")
     local city = UICity
     if not city then return end
 
     local res_overview = GetCityResourceOverview(city)
     if not res_overview then return end
-    print("SaveColonyStatusToYaml running...")
 
     local data = {
-        timestamp = RealTime(), -- Используем RealTime() вместо OsTime()
+        timestamp = RealTime(),
         sol = city.day or 0,
         population = table.count(city.labels.Colonist or ""),
         unemployed = table.count(city.labels.Unemployed or ""),
@@ -188,7 +188,6 @@ function SaveColonyStatusToYaml()
         weather = ActiveMapData and ActiveMapData.MapSettings_DustStorm or "Unknown"
     }
 
-    -- Вспомогательная функция для добавления ресурсов
     local function add_resource(name, stored, produced, consumed, capacity)
         data.resources[name] = {
             stored = string.format("%.1f", stored / const.ResourceScale),
@@ -198,7 +197,6 @@ function SaveColonyStatusToYaml()
         }
     end
 
-    -- Электричество
     add_resource("electricity",
         res_overview:GetTotalStoredPower(),
         res_overview:GetTotalProducedPower(),
@@ -206,7 +204,6 @@ function SaveColonyStatusToYaml()
         res_overview:GetElectricityStorageCapacity()
     )
 
-    -- Вода
     add_resource("water",
         res_overview:GetTotalStoredWater(),
         res_overview:GetTotalProducedWater(),
@@ -214,7 +211,6 @@ function SaveColonyStatusToYaml()
         res_overview:GetWaterStorageCapacity()
     )
 
-    -- Кислород
     add_resource("oxygen",
         res_overview:GetTotalStoredAir(),
         res_overview:GetTotalProducedAir(),
@@ -222,7 +218,7 @@ function SaveColonyStatusToYaml()
         res_overview:GetAirStorageCapacity()
     )
 
-    -- Собираем другие ресурсы: металлы, полимеры, бетон, машины и т.д.
+    -- Add stockpile resources (metals, polymers, concrete, etc.)
     local stockpile_resources = GetStockpileResourceList() -- {"Concrete", "Metals", "Polymers", "Electronics", "Machinery", "PreciousMetals"}
     for _, res_name in ipairs(stockpile_resources) do
         local stored = res_overview["GetAvailable" .. res_name](res_overview)
@@ -235,7 +231,6 @@ function SaveColonyStatusToYaml()
         )
     end
 
-    -- Преобразование таблицы в YAML строку
     local yaml = ""
 
     local function serialize(value, indent)
@@ -267,15 +262,12 @@ function SaveColonyStatusToYaml()
 
     serialize(data)
 
-    -- Сохранение
     g_env.AsyncStringToFile("AppData/from_game.yaml", yaml)
-    print("SaveColonyStatusToYaml saved!")
 end
 
--- Запуск раз в 30 секунд
 CreateRealTimeThread(function()
     while true do
-        Sleep(30 * 1000) -- 30 секунд
+        Sleep(30 * 1000)
         SaveColonyStatusToYaml()
     end
 end)
